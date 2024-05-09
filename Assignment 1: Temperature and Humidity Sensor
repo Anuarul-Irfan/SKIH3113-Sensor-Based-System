@@ -1,0 +1,76 @@
+/*
+Made By:
+Anuarul Irfan Bin Mohd Sofian
+288181
+
+Theme: Humidity and Temperature Sensor
+*/
+
+
+#include <Wire.h>                               // Include Wire library for I2C communication
+#include <Adafruit_GFX.h>                       // Include Adafruit_GFX library for graphics functions
+#include <Adafruit_SSD1306.h>                   // Include Adafruit_SSD1306 library for controlling OLED display
+#include <Adafruit_Sensor.h>                    // Include Adafruit_Sensor library for sensor abstraction
+#include <DHT.h>                                // Include DHT library for DHT sensor
+
+#define SCREEN_WIDTH 128                        // Define OLED display width
+#define SCREEN_HEIGHT 64                        // Define OLED display height
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);  // Initialize SSD1306 OLED display
+
+#define DHTPIN 14                               // Define digital pin connected to DHT sensor
+#define DHTTYPE    DHT11                        // Define DHT sensor type as DHT11
+
+DHT dht(DHTPIN, DHTTYPE);                        // Initialize DHT sensor
+
+void setup() {
+  Serial.begin(115200);                         // Initialize serial communication at baud rate 115200
+  
+  dht.begin();                                   // Initialize DHT sensor
+  
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  // Initialize OLED display with I2C address 0x3C
+    Serial.println(F("SSD1306 allocation failed"));  // Print error message if OLED display initialization fails
+    for(;;);                                    // Enter infinite loop if OLED display initialization fails
+  }
+  delay(2000);                                   // Add delay for 2 seconds
+  display.clearDisplay();                        // Clear OLED display
+  display.setTextColor(WHITE);                   // Set text color to white
+}
+
+void loop() {
+  delay(5000);                                   // Add delay for 5 seconds
+  
+  //read temperature and humidity
+  float t = dht.readTemperature();               // Read temperature from DHT sensor
+  float h = dht.readHumidity();                  // Read humidity from DHT sensor
+  if (isnan(h) || isnan(t)) {                    // Check if readings are valid
+    Serial.println("Failed to read from DHT sensor!");  // Print error message if reading from DHT sensor fails
+  }
+  // clear display
+  display.clearDisplay();                        // Clear OLED display
+  
+  // display temperature
+  display.setTextSize(1);                        // Set text size to 1
+  display.setCursor(0,0);                        // Set cursor position
+  display.print("Temperature: ");                // Print temperature label
+  display.setTextSize(2);                        // Set text size to 2
+  display.setCursor(0,10);                       // Set cursor position
+  display.print(t);                              // Print temperature value
+  display.print(" ");                            // Print space
+  display.setTextSize(1);                        // Set text size to 1
+  display.cp437(true);                           // Enable CP437 font
+  display.write(167);                            // Print degree symbol
+  display.setTextSize(2);                        // Set text size to 2
+  display.print("C");                            // Print Celsius unit
+  
+  // display humidity
+  display.setTextSize(1);                        // Set text size to 1
+  display.setCursor(0, 35);                      // Set cursor position
+  display.print("Humidity: ");                   // Print humidity label
+  display.setTextSize(2);                        // Set text size to 2
+  display.setCursor(0, 45);                      // Set cursor position
+  display.print(h);                              // Print humidity value
+  display.print(" %");                           // Print humidity unit
+  
+  display.display();                             // Update OLED display
+}
