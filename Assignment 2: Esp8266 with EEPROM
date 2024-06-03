@@ -1,0 +1,212 @@
+#include <ESP8266WiFi.h>
+#include <EEPROM.h>
+#include <ESP8266WebServer.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// Constants
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+#define EEPROM_SIZE 512
+
+// OLED display object
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Wi-Fi AP credentials for the configuration mode
+const char *ap_ssid = "Nuar_Config_AP";
+const char *ap_password = "password123";
+
+// Web server
+ESP8266WebServer server(80);
+
+// Variables for storing configuration
+char ssid[32];
+char password[32];
+char deviceID[16];
+bool lastOutputStatus;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize OLED
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  display.clearDisplay();
+  display.display();
+
+  // Initialize EEPROM
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Read configuration from EEPROM
+  if (!readConfig()) {
+    // Start in AP mode if no valid configuration found
+    startAPMode();
+  } else {
+    // Connect to Wi-Fi and display connection status
+    connectToWiFi();
+    updateOLED();
+  }
+}
+
+void loop() {
+  // Handle web server
+  server.handleClient();
+}
+
+bool readConfig() {
+  EEPROM.get(0, ssid);
+  EEPROM.get(32, password);
+  EEPROM.get(64, deviceID);
+  EEPROM.get(80, lastOutputStatus);
+
+  // Print read values for debugging
+  Serial.println("Reading configuration from EEPROM...");
+  Serial.print("SSID: ");
+  Serial.println(ssid);
+  Serial.print("Password: ");
+  Serial.println(password);
+  Serial.print("Device ID: ");
+  Serial.println(deviceID);
+  Serial.print("Last Output Status: ");
+  Serial.println(lastOutputStatus);
+
+  // Validate SSID
+  if (strlen(ssid) == 0) {
+    return false;
+  }
+  return true;
+}
+
+void saveConfig() {
+  Serial.println("Saving configuration to EEPROM...");
+  EEPROM.put(0, ssid);
+  EEPROM.put(32, password); 
+  EEPROM.put(64, deviceID);
+  EEPROM.put(80, lastOutputStatus);
+  EEPROM.commit();
+
+  // Print saved values for debugging
+  Serial.print("SSID: ");
+  Serial.println(ssid);
+  Serial.print("Password: ");
+  Serial.println(password);
+  Serial.print("Device ID: ");
+  Serial.println(deviceID);
+  Serial.print("Last Output Status: ");
+  Serial.println(lastOutputStatus);
+}
+
+void startAPMode() {
+  WiFi.softAP(ap_ssid, ap_password);
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
+
+  // Display AP mode info on OLED
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("AP Mode");
+  display.print("SSID: ");
+  display.println(ap_ssid);
+  display.print("Password: ");
+  display.println(ap_password);
+  display.print("IP: ");
+  display.println(IP);
+  display.display();
+
+  // Set up web server routes
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.begin();
+  Serial.println("HTTP server started");
+}
+
+void handleRoot() {
+  String html = "<form action=\"/save\" method=\"POST\">";
+  html += "SSID: <input type=\"text\" name=\"ssid\"><br>";
+  html += "Password: <input type=\"text\" name=\"password\" placeholder=\"Leave blank for open networks\"><br>";
+  html += "Device ID: <input type=\"text\" name=\"deviceID\"><br>";
+  html += "Output Status (0 or 1): <input type=\"text\" name=\"outputStatus\"><br>";
+  html += "<input type=\"submit\" value=\"Save\">";
+  html += "</form>";
+  server.send(200, "text/html", html);
+}
+
+void handleSave() {
+  String ssidInput = server.arg("ssid");
+  String passwordInput = server.arg("password");
+  String deviceIDInput = server.arg("deviceID");
+  String outputStatusInput = server.arg("outputStatus");
+
+  if (ssidInput.length() > 0) {
+    ssidInput.toCharArray(ssid, sizeof(ssid));
+    passwordInput.toCharArray(password, sizeof(password));
+    deviceIDInput.toCharArray(deviceID, sizeof(deviceID));
+    lastOutputStatus = outputStatusInput == "1";
+
+    saveConfig();
+    server.send(200, "text/html", "Configuration saved. Rebooting...");
+    delay(2000);
+    ESP.restart();
+  } else {
+    server.send(400, "text/html", "Invalid input");
+  }
+}
+
+void connectToWiFi() {
+  if (strlen(password) > 0) {
+    WiFi.begin(ssid, password);
+  } else {
+    WiFi.begin(ssid);
+  }
+
+  Serial.print("Connecting to Wi-Fi");
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Connecting to Wi-Fi...");
+  display.display();
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Connected!");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("Failed to connect. Restarting in AP mode.");
+    startAPMode();
+  }
+  updateOLED();
+}
+
+void updateOLED() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  if (WiFi.status() == WL_CONNECTED) {
+    display.println("Connected to Wi-Fi");
+    display.print("SSID: ");
+    display.println(ssid);
+    display.print("IP: ");
+    display.println(WiFi.localIP().toString());
+    display.print("Output Status: ");
+    display.println(lastOutputStatus ? "ON" : "OFF");
+    display.display();
+  } else {
+    display.println("Not connected");
+  }
+
+}
