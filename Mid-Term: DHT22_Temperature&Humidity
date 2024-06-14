@@ -1,0 +1,90 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include "DHT.h"
+
+// Replace with your network credentials
+const char* ssid = "Trailblazer";
+const char* password = "01162199220";
+
+// Replace with your Domain name and URL path or IP address with path
+const char* serverName = "http://192.168.45.24/dhtProject/esp-post-data.php";
+
+// Keep this API Key value to be compatible with the PHP code provided in the project page.
+String apiKeyValue = "tPmAT5Ab3j7F9";
+
+String sensorName = "DHT22";
+String sensorLocation = "My Room";
+
+#define DHTTYPE DHT22
+#define DHTPIN D5
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  // Check WiFi connection status
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+
+    // Your Domain name with URL path or IP address with path
+    http.begin(client, serverName);
+
+    // Specify content-type header
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    // Reading temperature and humidity from DHT22
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(temperature) || isnan(humidity)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+
+    // Prepare HTTP POST request data
+    String httpRequestData = "api_key=" + apiKeyValue +
+                             "&sensor=" + sensorName +
+                             "&location=" + sensorLocation +
+                             "&value1=" + String(temperature) +
+                             "&value2=" + String(humidity) +
+                             "&value3="+String(humidity); // Assuming DHT22 does not provide pressure
+
+    Serial.print("httpRequestData: ");
+    Serial.println(httpRequestData);
+
+    // Send HTTP POST request
+    int httpResponseCode = http.POST(httpRequestData);
+
+    if (httpResponseCode > 0) {
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+    } else {
+      Serial.print("Error code: ");
+      Serial.println(httpResponseCode);
+    }
+
+    // Free resources
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected");
+  }
+
+  // Delay before sending next HTTP POST request
+  delay(10000); // 10 seconds delay
+}
