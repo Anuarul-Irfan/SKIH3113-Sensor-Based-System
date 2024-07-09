@@ -1,22 +1,27 @@
 <?php
+// Include the 'esp-database.php' file which likely contains database configurations and functions.
 include_once('esp-database.php');
 
+// Check if 'readingsCount' parameter is set in the GET request.
 if (isset($_GET["readingsCount"])) {
+    // Sanitize and store the 'readingsCount' parameter.
     $data = $_GET["readingsCount"];
-    $data = trim($data);
-    $data = stripslashes($data);
-    $data = htmlspecialchars($data);
-    $readings_count = $data;
+    $data = trim($data);  // Trim whitespace
+    $data = stripslashes($data);  // Remove backslashes
+    $data = htmlspecialchars($data);  // Convert special characters to HTML entities
+    $readings_count = $data;  // Assign sanitized value to $readings_count
 } else {
-    $readings_count = 20; // Default readings count set to 20
+    $readings_count = 20; // Default readings count set to 20 if 'readingsCount' is not provided
 }
 
+// Fetch the last sensor readings from the database.
 $last_reading = getLastReadings();
 $last_reading_temp = $last_reading["value1"];
 $last_reading_humi = $last_reading["value2"];
 $last_reading_pres = $last_reading["value3"];
 $last_reading_time = $last_reading["reading_time"];
 
+// Calculate minimum, maximum, and average readings for temperature, humidity, and pressure.
 $min_temp = minReading($readings_count, 'value1');
 $max_temp = maxReading($readings_count, 'value1');
 $avg_temp = avgReading($readings_count, 'value1');
@@ -29,16 +34,18 @@ $min_pres = minReading($readings_count, 'value3');
 $max_pres = maxReading($readings_count, 'value3');
 $avg_pres = avgReading($readings_count, 'value3');
 
-// Fetch historical data
+// Fetch historical sensor data for the specified number of readings.
 $historical_data = getAllReadings($readings_count);
 $temp_data = [];
 $humi_data = [];
 $pres_data = [];
 $timestamps = [];
 
+// Process historical data if available.
 if ($historical_data) {
     while ($row = $historical_data->fetch_assoc()) {
-        $timestamp = strtotime($row["reading_time"]) * 1000; // Convert to milliseconds
+        // Convert reading timestamp to milliseconds for JavaScript compatibility.
+        $timestamp = strtotime($row["reading_time"]) * 1000;
         $timestamps[] = $timestamp;
         $temp_data[] = [(float)$timestamp, (float)$row["value1"]];
         $humi_data[] = [(float)$timestamp, (float)$row["value2"]];
@@ -46,9 +53,10 @@ if ($historical_data) {
     }
 }
 
+// Free the result set.
 $historical_data->free();
 
-
+// Function to generate insights based on measurement type, minimum, maximum, and average values.
 function getInsight($measurement, $min, $max, $avg) {
     switch ($measurement) {
         case 'Temperature':
